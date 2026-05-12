@@ -56,8 +56,8 @@ ECHELLE, OFFSET_X, OFFSET_Y = 80, 10, 10
 # Initialisation des objets (Robot + Camera + Controlleur IBVS + Cibles + Bruits + Obstacles)
 START_POSE = (X0, -Y0, theta) # Pose initiale du robot
 robot = Robot_Differentiel(*START_POSE)
-camera = Camera_Virtuel(focal=130, resolution=(320, 240))
-controller = Controlleur_IBVS(camera, gain=0.25)
+camera = Camera_Virtuel(focal=140, resolution=(320, 240))
+controller = Controlleur_IBVS(camera, gain=0.3)
 
 # Cible par défaut en coordonées pixels
 controller.s_star= np.array([58, 21, 255, 21, 250, 213, 63, 213])
@@ -65,7 +65,7 @@ print(f"\nCible s* (rectangle) par defaut en pixels {controller.s_star}\n")
 
 # Cibles (4 points du marqueur) en coordonnées primitives
 START_TARGETS = [
-    [np.array([4.0, -5.0, 0.5]), np.array([5, -5.0, 0.5]), np.array([5, -5.0, -0.5]), np.array([4.0, -5.0, -0.5])],
+    # [np.array([4.0, -5.0, 0.5]), np.array([5, -5.0, 0.5]), np.array([5, -5.0, -0.5]), np.array([4.0, -5.0, -0.5])],
     [np.array([2.0, -0.22, 0.5]), np.array([3, -0.22, 0.5]), np.array([3, -0.2, -0.5]), np.array([2.0, -0.2, -0.5])],
     
 ]
@@ -93,9 +93,7 @@ history_v = [[], [], [], []] # 4 listes pour les coordonnées v des 4 points
 
 # Historique des positions pour la trajectoire du robot
 trajectoire_points = [] 
-distance_history = []
-distance_parcourue = 0
-xo, yo, _ = robot.get_pose()
+orientation_history = []
 
 ##=================================================================================================================================
 
@@ -263,7 +261,7 @@ while running:
                 history_v = [[], [], [], []] # 4 listes pour les coordonnées v des 4 points
                 
                 trajectoire_points = [] # Trajectoire dans le monde
-                distance_history = [] # Distance parcourue par le robot
+                orientation_history = [] # Stockage de l'orientation du robot
                 
                 print("\nReset: Configuration de départ restaurée\n")
 
@@ -308,11 +306,9 @@ while running:
             w_robot_history.append(w_c)
             w_cam_history.append(w_cam)
             
-            # Distance parcourue par le robot dans le monde
-            ds=np.sqrt((curr_pose[0] - xo)**2  +  (curr_pose[1] - yo)**2)
-            distance_parcourue += ds
-            distance_history.append(distance_parcourue)      
-            xo, yo = curr_pose[0], curr_pose[1] # Mise à jour pour la prochiane iteration
+            # Orientation du robot dans le monde
+            orientation_history.append(np.degrees(robot.theta)) 
+
             
             for i in range(4):
                 # Erreurs visuelles e = s - s*
@@ -345,11 +341,13 @@ while running:
         if keys[pygame.K_d]: camera.pan_angle -= 1.5 * T_ech
     # ----------------------------------------------------------------------------------------------------------------------------------
     
-    # # Test de validations du modèle cinematique
+    # # Test de validations du modèle cinematique et modele geometrique du robot
     # time_history.append(current_time)
     # v_g,v_d = 1,1
     # v_g_history.append(v_g)
     # v_d_history.append(v_d)
+    # Orientation du robot dans le monde
+    # orientation_history.append(np.degrees(robot.theta)) 
     
     
     
@@ -449,17 +447,22 @@ if time_history:
         v_star = controller.s_star[2*i+1]
         plt.scatter(u_star, v_star, color='red', marker='x', s=100)
 
-    # plt.gca().invert_yaxis()  # Configuration de l'axe (inversé pour correspondre à la configuration fenetre pygame)
+    plt.gca().invert_yaxis()  # Configuration de l'axe (inversé pour correspondre à la configuration fenetre pygame)
     plt.title("Trajectoires des points dans le plan image (u, v)")
     plt.xlabel("u (pixels)"); plt.ylabel("v (pixels)"); plt.legend(); plt.grid(True)
     # plt.axis('equal') # Important pour ne pas déformer la géométrie
     
 
-    ## FENETRE 5: TRAJECTOIRE DU ROBOT DANS LE MONDE (DISTANCE PARCOURUE)
-    plt.figure("Evolution de la distance parcourue", figsize=(10, 5))
-    plt.plot(time_history,distance_history,label= "Distance")
-    plt.title("Distance parcourue par le robot (sous IBVS)")
-    plt.xlabel("Temps (s)"); plt.ylabel("Distance (m)"); plt.legend(); plt.grid(True)
+    ## FENETRE 5: ORIENTATION DU ROBOT DANS LE MONDE (DISTANCE PARCOURUE)
+    plt.figure("Evolution de l'orientation du robot", figsize=(10, 5))
+    plt.ylim(-np.degrees(np.pi), np.degrees(np.pi)) # Echelle visuelle fiée à [-180°; 180°]
+    plt.plot(time_history,orientation_history,label= "Angle d'orientation")
+    # On récupère la valeur actuelle
+    current_theta = orientation_history[-1]
+
+    # plt.ylim(-np.degrees(np.pi), np.degrees(np.pi)) # Echelle visuelle fiée à [-180°; 180°]
+    plt.title("Orientation du robot (sous IBVS)")
+    plt.xlabel("Temps (s)"); plt.ylabel("theta_robot (°)"); plt.legend(); plt.grid(True)
   
     
     
