@@ -6,22 +6,36 @@ from robot import Robot_Differentiel
 from camera import Camera_Virtuel
 from ibvs import Controlleur_IBVS
 
-X0,Y0,theta,Xu,Yu=3,5,0*np.pi,3,2 # Valeurs par defaut
+# X0,Y0,theta,Xu,Yu=3,5,0*np.pi,3,2 # Valeurs par defaut
 
 ##================================================= INTERFACE UTILISATEUR ===========================================================
-# print("SIMULATEUR DE LA NAVIGATION AUTONOME D'UN ROBOT DIFFERENTIEL\n\n")
-# # Position de depart du robot
-# print("Choisir la position (x,y,thetha) de depart du robot: x=[0; 10](m), y=[0;10](m), theta=[-pi;pi](en radian)")
-# X0=float(input("Valeur de x: "))
-# Y0=float(input("Valeur de y: "))
-# theta=np.pi*float(input("Valeur de theta: "))
+print("===========================================================================================================\n")
+print("                        SIMULATEUR DE LA NAVIGATION AUTONOME D'UN ROBOT DIFFERENTIEL\n")
+print("===========================================================================================================\n\n")
 
-# # Position de l'obstacle
-# print("\nChoisir la position de l'obstacle (x,y)")
-# Xu=float(input("Valeur de x: "))
-# Yu=float(input("Valeur de y: "))
-# print("\n\n")
+# Position de depart du robot
+print("Choisir la position (x,y,thetha) de depart du robot: x=[0; 10](m), y=[0;10](m), theta=[-pi;pi](en radian)")
+X0=float(input("Valeur de x: "))
+Y0=float(input("Valeur de y: "))
+theta=np.pi*float(input("Valeur de theta: "))
 
+print("\n\n")
+
+# Ajout des obstacles (non obstruant) (x, y, rayon = 0.3)
+nbr_obstacles= int(input("Combien d'obstacles vous desirer ?: "))
+OBSTACLES = [] # Liste des obstacles
+
+i=0
+while(nbr_obstacles > i):
+    # Position des obstacles
+    print(f"\nChoisir la position de l'obstacle (x,y)  N°{i+1} : x=[0; 10](m), y=[0;10](m)")
+    Xu=float(input("Valeur de x: "))
+    Yu=float(input("Valeur de y: "))
+    OBSTACLES.append((Xu,-Yu,0.3))
+    
+    i+=1
+    
+print("\n\n")
 
 
 
@@ -47,25 +61,26 @@ controller = Controlleur_IBVS(camera, gain=0.25)
 
 # Cible par défaut en coordonées pixels
 controller.s_star= np.array([58, 21, 255, 21, 250, 213, 63, 213])
-print(f"\nCible s* par defaut en pixels {controller.s_star}\n")
+print(f"\nCible s* (rectangle) par defaut en pixels {controller.s_star}\n")
 
 # Cibles (4 points du marqueur) en coordonnées primitives
 START_TARGETS = [
-    # [np.array([4.0, -5.0, 0.5]), np.array([5, -5.0, 0.5]), np.array([5, -5.0, 0]), np.array([4.0, -5.0, 0])],
+    [np.array([4.0, -5.0, 0.5]), np.array([5, -5.0, 0.5]), np.array([5, -5.0, -0.5]), np.array([4.0, -5.0, -0.5])],
     [np.array([2.0, -0.22, 0.5]), np.array([3, -0.22, 0.5]), np.array([3, -0.2, -0.5]), np.array([2.0, -0.2, -0.5])],
+    
 ]
 CIBLES = list(START_TARGETS) # Liste des cibles
 
 # Intensité du bruit (un écart-type en pixels)
 BRUIT = 0.0
 
-# Ajout des obstacles (x, y, rayon)
-OBSTACLES = [
-    # (6.0, -2.0, 0.3), 
-    # (6.0, -6, 0.3),
-    # (8, -3.0, 0.3),
-    # (Xu,-Yu,0.3)
-]
+# # Ajout des obstacles (x, y, rayon)
+# OBSTACLES = [
+#     # (6.0, -2.0, 0.3), 
+#     # (6.0, -6, 0.3),
+#     # (8, -3.0, 0.3),
+#     (Xu,-Yu,0.3)
+# ]
 
 # Variables pour le tracé de l'erreur visuelle e, des entrées de commandes et trajectoire dans le plan image de s
 erreurs_par_point = [[], [], [], []]
@@ -87,11 +102,14 @@ xo, yo, _ = robot.get_pose()
 
 
 
+
 ##============================================== FONCTIONS DE LA BOUCLE DE SIMULATION =============================================
+
 
 # --------------------------------------------- Conversion coordonnées géometriques --> coordonnées écran -------------------------
 def monde_vers_ecran(x, y): 
     return (int(x * ECHELLE + OFFSET_X), int(-y * ECHELLE + OFFSET_Y))
+
 
 # ---------------------------------------------- Cible dans le champ de vision (Recherche cible) ----------------------------------
 def champ_vision(target_pts, robot_pose, cam):
@@ -108,6 +126,7 @@ def champ_vision(target_pts, robot_pose, cam):
         angle = (np.arctan2(dy, dx) - cam_theta + np.pi) % (2 * np.pi) - np.pi  #[modulo 2pi]
         if abs(np.degrees(angle)) <= 60: return True # Aire du champ de vison de la camera à 60°
     return False
+
 
 # --------------------------------------------------- Affichage de la scene -------------------------------------------------------
 def dessiner_interface(surface, robot_pose, current_targets):
@@ -127,8 +146,8 @@ def dessiner_interface(surface, robot_pose, current_targets):
         pygame.draw.lines(surface, (0, 255, 255), False, trace_robot, 2)
         
         
-    # --------- Dessin des obstacles sur la scene + Gestion des collisions
-    x_r, y_r, theta_r = robot_pose # coordonnées primitives
+    # --------- Dessin des obstacles  sur la scene + Gestion des collisions
+    x_r, y_r, theta_r = robot_pose # coordonnées primitives du robot
     largeur_robot = 0.2
     d_influence = 0.5
     for ox, oy, r_obs in OBSTACLES:
@@ -140,7 +159,7 @@ def dessiner_interface(surface, robot_pose, current_targets):
         if 0 < dist_bord < d_influence: # Gestion Alerte collisions
             pygame.draw.circle(surface, RED, monde_vers_ecran(ox, oy), int(r_obs * ECHELLE)) # Alerte danger (obstacle en rouge)
  
-        else: # Affichage obstacle
+        else: # Affichage obstacle (sans alerte)
             pygame.draw.circle(surface, WHITE, monde_vers_ecran(ox, oy), int(r_obs * ECHELLE))
             pygame.draw.circle(surface, RED, monde_vers_ecran(ox, oy), int(r_obs * ECHELLE),2)
         
@@ -248,7 +267,7 @@ while running:
                 
                 print("\nReset: Configuration de départ restaurée\n")
 
-    # Obtenir les coordonnées normalisées de la vue courante cible s + images sur la camera
+    # Obtenir les coordonnées normalisées de la vue courante cible s + images sur la camera (interface de vue de la camera)
     cam_img, cible_visible = camera.get_view(robot.get_pose(), CIBLES, OBSTACLES,s_star=controller.s_star)
     
     # ------------------- Injection du bruit sur les coordonnées des points détectés
@@ -262,6 +281,7 @@ while running:
                 v_n = v + np.random.normal(0, BRUIT)
                 bruit_pts.append((u_n, v_n))
             cible.append((cible_id, bruit_pts))
+            
             
     # ----------------------------------------------- Mode automatique (IBVS) --------------------------------------------------
                
@@ -304,6 +324,7 @@ while running:
                 history_v[i].append(s[2*i+1])   # v du point i     
                                   
         
+        
     # ------------------------------------------------- Mode manuelle (Avec les touches du clavier) --------------------------------
     
     elif not auto_mode: # mode manuel
@@ -336,7 +357,7 @@ while running:
     
     
     
-    # -------------- Tracé de la trajectoire du robot  
+    # -------------- Trajectoire du robot sur la scene 
     curr_pose = robot.get_pose() # Copie de la pose courante du robot
     
     if not trajectoire_points or np.linalg.norm(curr_pose[:2] - trajectoire_points[-1]) > 0.05:
@@ -350,7 +371,7 @@ while running:
     dessiner_interface(ecran, robot.get_pose(), CIBLES)
     
     
-    # -------------- Affichage Vue Caméra sur la fenetre
+    # -------------- Affichage interface Caméra sur la fenetre principale
     cam_surf = pygame.surfarray.make_surface(cv2.cvtColor(cam_img, cv2.COLOR_BGR2RGB).swapaxes(1, 0))
     ecran.blit(cam_surf, (850, 10))
     pygame.draw.rect(ecran, WHITE, (850, 10, 320, 240), 5)
@@ -409,12 +430,12 @@ if time_history:
     plt.xlabel("Temps (s)"); plt.ylabel("Vitesses"); plt.legend(); plt.grid(True)
     
     
-    # # FENETRE 3: COMMANDES DES VITESSES DE ROTATIONS (ROBOT + CAMERA)
-    # plt.figure("Commandes rotatives", figsize=(10, 5))
-    # plt.plot(time_history, w_robot_history, label="W_robot", color='green',linestyle='--')
-    # plt.plot(time_history, w_cam_history, label="W_cam", color='red',linestyle='--')
-    # plt.title("Commandes des vitesses de rotation")
-    # plt.xlabel("Temps (s)"); plt.ylabel("Vitesses"); plt.legend(); plt.grid(True)
+    # FENETRE 3: COMMANDES DES VITESSES DE ROTATIONS (ROBOT + CAMERA)
+    plt.figure("Commandes rotatives", figsize=(10, 5))
+    plt.plot(time_history, w_robot_history, label="W_robot", color='green',linestyle='--')
+    plt.plot(time_history, w_cam_history, label="W_cam", color='red',linestyle='--')
+    plt.title("Commandes des vitesses de rotation")
+    plt.xlabel("Temps (s)"); plt.ylabel("Vitesses"); plt.legend(); plt.grid(True)
     
     
     ## FENETRE 4: TRAJECTOIRES DANS LE PLAN IMAGE DES POINTS CIBLES S RELATIVE à S*
@@ -428,18 +449,17 @@ if time_history:
         v_star = controller.s_star[2*i+1]
         plt.scatter(u_star, v_star, color='red', marker='x', s=100)
 
-    plt.gca().invert_yaxis()  # Configuration de l'axe (inversé pour correspondre aux pixels image)
+    # plt.gca().invert_yaxis()  # Configuration de l'axe (inversé pour correspondre à la configuration fenetre pygame)
     plt.title("Trajectoires des points dans le plan image (u, v)")
     plt.xlabel("u (pixels)"); plt.ylabel("v (pixels)"); plt.legend(); plt.grid(True)
     # plt.axis('equal') # Important pour ne pas déformer la géométrie
+    
 
     ## FENETRE 5: TRAJECTOIRE DU ROBOT DANS LE MONDE (DISTANCE PARCOURUE)
     plt.figure("Evolution de la distance parcourue", figsize=(10, 5))
     plt.plot(time_history,distance_history,label= "Distance")
     plt.title("Distance parcourue par le robot (sous IBVS)")
     plt.xlabel("Temps (s)"); plt.ylabel("Distance (m)"); plt.legend(); plt.grid(True)
-
-
   
     
     
