@@ -14,7 +14,7 @@ class Camera_Virtuel:
         
         self.pan_angle = 0.0 # Angle de rotation propre de la platine (la caméra hérite la rotation de la platine)
         self.a = 0.3  # Décalage centre robot <--> centre platine
-        self.h_cam = 1.0 # Hauteur de la camera par rapport à la base de la platine
+        self.h_cam = 0.05 # Hauteur de la camera par rapport à la base de la platine
         
         
     
@@ -36,7 +36,7 @@ class Camera_Virtuel:
         T_Rpl = np.array([
             [np.cos(self.pan_angle), -np.sin(self.pan_angle), 0, self.a],
             [np.sin(self.pan_angle),  np.cos(self.pan_angle), 0, 0],
-            [0, 0, 1, 0],
+            [0, 0, 1, -self.h_cam],
             [0, 0, 0, 1]
         ])
         

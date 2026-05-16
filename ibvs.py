@@ -5,11 +5,16 @@ class Controlleur_IBVS:
         self.cam = camera
         self.lmbda = gain 
         self.s_star = None
-        self.Z_star = 1.0# Profondeur Z initialisée
+        self.Z_star = 0.5# Profondeur Z initialisée
+        
+        # Mémoire pour le lissage des entrées de commandes
+        self.v_prev = 0.0
+        self.w_prev = 0.0
+        self.w_cam_prev = 0.0
 
 
     # Tri des points cibles s* dans le bon ordre dans la camera
-    def sort_points(self, points):
+    def Trier_points(self, points):
         pts = np.array(points)
         pts = pts[pts[:, 1].argsort()]
         Haut = pts[:2][pts[:2][:, 0].argsort()]
@@ -18,7 +23,7 @@ class Controlleur_IBVS:
     
     
     # Commandes : v_robot, w_robot, w_camera
-    def commande_IBVS(self, visible_targets, robot_pose=None, obstacles_list=None):
+    def commande_IBVS(self, T_ech, visible_targets, robot_pose=None, obstacles_list=None):
         
         # Rotation de la camera si cible non visible
         if not visible_targets:
@@ -34,7 +39,7 @@ class Controlleur_IBVS:
         # ======================================================================
         
         # Aquisition des pixels de la cible courante s
-        s = self.sort_points(pixels_bruts) # Cible s
+        s = self.Trier_points(pixels_bruts) # Cible s
         
         # Calcul de l'erreur visuelle e = (s - s*)
         error = s - self.s_star
@@ -79,45 +84,28 @@ class Controlleur_IBVS:
         w_c_ibvs = q_point[1]
         w_cam_ibvs = q_point[2]
         
-        # --------- Test IBVS (sans evitement obstacles)
-        # # Calcul des commandes des roues et de la camera avec saturation
-        # v_c = np.clip(v_c_ibvs, -0.8, 0.8)
-        # w_c = np.clip(w_c_ibvs, -1.0, 1.0)
-        # w_cam = 0.5 * np.clip(w_cam_ibvs, -1.5, 1.5) # Limite pour la rotation du lacet de la caméra
+        # =====================================================================================
         
-        # # Gestion de la zone morte
-        # if x_err < 10: # pixels
-        #     v_c *= 0.5
-        #     w_c *= 0.5
-        #     w_cam *= 0.5
-        
-        # # # Condition d'arret du robot 
-        # # if x_err < 5.0: # Stop
-        # #     v_c, w_c, w_cam, x_err = 0, 0, 0, 0
-        
-        # return v_c, w_c, w_cam, x_err, error,s
-
         
 
-        # ====================================================================================================
-        #         Evitement d'obstacles (Champ de potentiel rotatif + Hierarchie de taches & Découplage)
-        # ====================================================================================================
+        # =====================================================================================
+        #         Evitement d'obstacles (Champ de potentiel rotatif & Découplage)
+        # =====================================================================================
         
-        # Entrées de commandes pour la repulsion
+        # Commandes pour la repulsion
         v_rep = 0.0 
         w_rep = 0.0
         
-        # Initialisation pour le recul d'urgence devant la cible
+        # Initialisation pour le traitement de l'évitement d'obstacle
         v_c_total = v_c_ibvs 
         w_c_total = w_c_ibvs
         
-        if robot_pose is not None and obstacles_list is not None:
+        if robot_pose is not None and obstacles_list is not None: # Si presence d'obstacles
             x_r, y_r, theta_r = robot_pose
-            d_influence = 0.8  # Distance d'anticipation
-            d_recul = 0.2     # Zone de collision imminente (Recul)
-            k_w_evit = 1.5   # Gain de rotation pour s'écarter
+            d_influence = 1  # Distance d'anticipation
+            k_w_evit = 1.5   # Gain de rotation pour s'écarter de l'obstacle
             k_v_frein = 0.5   # Gain de freinage
-            largeur_robot = 0.3 # Estimation de la largeur du robot pour la planification
+            largeur_robot = 0.2 # Estimation de la largeur du robot pour la planification
 
             for ox, oy, r_obs in obstacles_list:
                 dx = ox - x_r
@@ -128,60 +116,62 @@ class Controlleur_IBVS:
 
                 if 0 < dist_bord < d_influence:
                     angle_obs_global = np.arctan2(dy, dx)
-                    angle_obs_local = (angle_obs_global - theta_r + np.pi) % (2 * np.pi) - np.pi # Difference angle obstacle-robot em modulo pi
+                    angle_obs_local = (angle_obs_global - theta_r + np.pi) % (2 * np.pi) - np.pi # Difference angle obstacle-robot em modulo 2pi
+                    
+                   
+                    # ----------------------- Champs de potentiel repulsif ----------------------------
                     
                     if abs(angle_obs_local) < (np.pi / 1.5): # Si l'obstacle est devant
                         # On force un côté si c'est pile en face pour éviter les vibrations
                         glisser = -np.sign(angle_obs_local) if abs(angle_obs_local) > 0.1 else 1.0
+                            
+                        # Intensité de la répulsion
+                        force = ((1.0 / dist_bord) - (1.0 / d_influence))
                         
-                        # Niveau 1: Recul de sécurité
-                        if dist_bord <= d_recul: 
-                            v_c_total = -0.3 
-                            w_c_total = glisser * 0.8 # On tourne un peu pour se désaxer
-                         
-                        # Niveau 2: Champs de repulsion classique   
-                        else: 
-                            # Intensité de la répulsion
-                            force = ((1.0 / dist_bord) - (1.0 / d_influence))
-                            
-                            # Freinage linéaire
-                            v_rep -= np.cos(angle_obs_local) * force * k_v_frein
-                            
-                            # Rotation d'évitement (pour contourner)
-                            w_rep += glisser * force * k_w_evit
-                            
-                            # Calcul des vitesses finales combinées (IBVS + Évitement) 
-                            sigma= (d_influence - dist_bord) / d_influence
-                            v_c_total = (1-sigma)*v_c_ibvs + sigma*v_rep
-                            w_c_total = (1-sigma)*w_c_ibvs + sigma*w_rep
-                            
-                            # Correction du point mort (si le robot n'avance plus)
-                            if v_c_total < 0.05:
-                                w_c_total = glisser * k_w_evit * 1.2
+                        # Freinage linéaire
+                        v_rep -= np.cos(angle_obs_local) * force * k_v_frein
+                        
+                        # Rotation d'évitement (pour contourner)
+                        w_rep += glisser * force * k_w_evit
+                        
+                        # Calcul des vitesses finales combinées (IBVS + Évitement) 
+                        sigma= np.clip((d_influence - dist_bord) / d_influence,0,1)**2
+                        v_c_total = (1-sigma)*v_c_ibvs + sigma*v_rep
+                        w_c_total = (1-sigma)*w_c_ibvs + sigma*w_rep
+                        
+                        # Correction du point mort (si le robot n'avance plus)
+                        if v_c_total < 0.05:
+                            w_c_total = glisser * k_w_evit * 1.2
                         
                         break # On gère l'obstacle le plus proche en priorité et on sort
+                    
 
         # Decouplage platine-robot : La platine compense la rotation du robot pour fixer la cible
         w_cam_total = w_cam_ibvs - (w_c_total - w_c_ibvs)
         # =============================================================================================
-
         
-        # Calcul des entrées de commandes des roues et de la camera avec saturation
-        v_c = np.clip(v_c_total, -1, 1)
-        w_c = np.clip(w_c_total, -1, 1)
-        w_cam = np.clip(w_cam_total, -1.5, 1.5) # Limite pour la rotation du lacet de la caméra
+        
+        #  Calcul des entrées de commandes avec saturation et lissage
+        max_dv = 1.0 * T_ech  # Ecart de vitesse (m/s)
+        max_dw = 1.5 * T_ech  # Ecart de vitesse de rotation (rad/s)
+        v_c = np.clip(self.v_prev + np.clip(v_c_total - self.v_prev, -max_dv, max_dv), -0.8, 0.8)
+        w_c = np.clip(self.w_prev + np.clip(w_c_total - self.w_prev, -max_dw, max_dw), -1.0, 1.0)
+        w_cam = np.clip(self.w_cam_prev + np.clip(w_cam_total - self.w_cam_prev, -max_dw, max_dw), -1.5, 1.5)
         
         
         # Gestion de la zone morte
-        if x_err < 10: # pixels
+        if x_err < 10: # pixels            
             v_c *= 0.5
             w_c *= 0.5
-            w_cam *= 2
+            w_cam *= 0.5
+        
             
-        # Condition d'arret du robot 
+        # Mise à jour de la mémoire pour la prochaine itération (Lissage)
+        self.v_prev, self.w_prev, self.w_cam_prev = v_c, w_c, w_cam
+        
+        
+        # Condition d'arret du robot
         if x_err < 3.0: # Stop
             v_c, w_c, w_cam, x_err , error = 0, 0, 0, 0, np.array([0,0,0,0,0,0,0,0])
             
         return v_c, w_c, w_cam, x_err, error,s
-    
-    

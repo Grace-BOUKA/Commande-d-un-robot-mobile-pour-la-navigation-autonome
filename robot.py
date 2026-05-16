@@ -19,7 +19,7 @@ class Robot_Differentiel:
         self.x += v_lineaire * np.cos(self.theta) * T_ech
         self.y += v_lineaire * np.sin(self.theta) * T_ech
         self.theta += v_angulaire * T_ech
-        self.theta = (self.theta + np.pi) % (2 * np.pi) - np.pi # Modulo pi
+        self.theta = (self.theta + np.pi) % (2 * np.pi) - np.pi # Modulo 2pi
     
     # Coordonnées primitives du robot
     def get_pose(self):
