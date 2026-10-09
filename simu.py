@@ -24,6 +24,11 @@ choix_cible=int(input("Quelle choix de cible preferez-vous? [1: Cible rectangle 
 
 print("\n\n")
 
+# Intensité du bruit (un écart-type en pixels)
+BRUIT=float(input("Renseigner l'intensité du bruit (si bruit non souhaité mettre 0): "))
+
+print("\n\n")
+
 # Ajout des obstacles (non obstruant) (x, y, rayon = 0.3)
 nbr_obstacles= int(input("Combien d'obstacles vous desirer ?: "))
 OBSTACLES = [] # Liste des obstacles
@@ -39,8 +44,6 @@ while(nbr_obstacles > i):
     i+=1
     
 print("\n\n")
-
-
 
 
 
@@ -77,8 +80,6 @@ START_TARGETS = [
 ]
 CIBLES = list(START_TARGETS) # Liste des cibles
 
-# Intensité du bruit (un écart-type en pixels)
-BRUIT = 0.0
 
 
 # Variables pour le tracé de l'erreur visuelle e, des entrées de commandes et trajectoire dans le plan image de s
@@ -279,7 +280,7 @@ while running:
                 
 
     # Obtenir les coordonnées normalisées de la vue courante cible s + images sur la camera (interface de vue de la camera)
-    cam_img, cible_visible = camera.get_view(robot.get_pose(), CIBLES,choix_cible, OBSTACLES,s_star=controller.s_star)
+    cam_img, cible_visible = camera.get_view(robot.get_pose(), CIBLES, OBSTACLES, choix_cible, s_star=controller.s_star)
     
     # ------------------- Injection du bruit sur les coordonnées des points détectés
     cible = [] # Cible + bruit éventuel
@@ -399,6 +400,7 @@ while running:
         (f"V_roueG: {v_g:.2f} m/s, V_roueD: {v_d:.2f} m/s", WHITE, 850, 420),
         (f"W_cam: {w_cam_affichage:.2f} rad/s, W_robot: {w_robot_affichage:.2f} rad/s", WHITE, 850, 450),
         (f"Pan Caméra: {np.degrees(camera.pan_angle):.1f}°", YELLOW, 850, 480),
+        (f"--------------------- Guide clavier utilisateur ---------------------------", GREEN, 850, 520),
         ("- Touche 'A' : Switch mode auto/manuel", YELLOW, 850, 550),
         ("- Touche 'R' : Revenir configuration depart", RED, 850, 580),
         ("- Fleches : Direction pour le mode manuel", WHITE, 850, 610),

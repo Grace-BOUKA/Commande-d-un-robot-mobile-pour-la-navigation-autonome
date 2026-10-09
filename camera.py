@@ -71,7 +71,7 @@ class Camera_Virtuel:
     
     
     # ------------- Obtenir les coordonnées normalisées de la cible + l'interface de la camera
-    def get_view(self, robot_pose, targets, obstacles_list, s_star=None): 
+    def get_view(self, robot_pose, targets, obstacles_list, choix, s_star=None): 
         img = np.zeros((self.height, self.width, 3), dtype=np.uint8)
         
         # Environnement camera (Ciel et Sol)
@@ -101,6 +101,7 @@ class Camera_Virtuel:
                     cv2.circle(img, (u_s, v_s), 4, (0, 0, 255), 1) # Dessin Cible s* (Points Rouge)
                     
         
+        if choix==1:
         # ------------------------------------------ Dessin Cible rectangle plein --------------------------------------------------  
             if len(pixels) == 4:
                 cibles_visibles.append((i, pixels))
@@ -109,26 +110,26 @@ class Camera_Virtuel:
                 # cv2.polylines(img, [pts], True, (255, 255, 255), 1) # rectangle creux
                 cv2.fillPoly(img, [pts], (0, 200, 180)) # Rectangle plein
         
-        
-        ##------------------------------------------ Dessin Cible Qrcode -----------------------------------------------------------
-        #     if len(pixels) == 4:
-        #         cibles_visibles.append((i, pixels))
+        if choix==2:
+        #------------------------------------------ Dessin Cible Qrcode -----------------------------------------------------------
+            if len(pixels) == 4:
+                cibles_visibles.append((i, pixels))
                 
-        #         qr_img = cv2.imread('simulateur_python_IBVS/Test_IBVS_3DD_ameliorée/mon_qrcode.png')
+                qr_img = cv2.imread('mon_qrcode.png')
                 
-        #         if qr_img is not None:
-        #             h_q, w_q = qr_img.shape[:2]
-        #             # On force le type float32 pour les points
-        #             src_pts = np.array([[0,0], [w_q,0], [w_q,h_q], [0,h_q]], dtype=np.float32)
-        #             dst_pts = np.array(pixels, dtype=np.float32)
+                if qr_img is not None:
+                    h_q, w_q = qr_img.shape[:2]
+                    # On force le type float32 pour les points
+                    src_pts = np.array([[0,0], [w_q,0], [w_q,h_q], [0,h_q]], dtype=np.float32)
+                    dst_pts = np.array(pixels, dtype=np.float32)
                     
-        #             # findHomography renvoie (matrice, masque), on ne veut que la matrice [0]
-        #             h_mat, _ = cv2.findHomography(src_pts, dst_pts)
+                    # findHomography renvoie (matrice, masque), on ne veut que la matrice [0]
+                    h_mat, _ = cv2.findHomography(src_pts, dst_pts)
                     
-        #             # On vérifie que h_mat n'est pas vide avant de déformer
-        #             if h_mat is not None:
-        #                 # On applique la transformation
-        #                 img = cv2.warpPerspective(qr_img, h_mat, (self.width, self.height),dst=img, borderMode=cv2.BORDER_TRANSPARENT)
+                    # On vérifie que h_mat n'est pas vide avant de déformer
+                    if h_mat is not None:
+                        # On applique la transformation
+                        img = cv2.warpPerspective(qr_img, h_mat, (self.width, self.height),dst=img, borderMode=cv2.BORDER_TRANSPARENT)
 
         # # ------------------------------------------------------------------------------------------------------------------------------
         
